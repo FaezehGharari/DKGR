@@ -1,3 +1,5 @@
+This repository is based on the DKGR project, which is described in detail below. In this fork, I have combined two powerful AI paradigms, reinforcement learning (RL) and transformers, by implementing a transformer as the policy network for RL agents.
+
 # Learning to Walk with Dual Agents for Knowledge Graph Reasoning
 
 Pytorch Implementation for AAAI' 2022 paper: Learning to Walk with Dual Agents for Knowledge Graph Reasoning
