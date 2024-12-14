@@ -1,5 +1,9 @@
 This repository is based on the DKGR project, which is described in detail below. In this fork, I have combined two powerful AI paradigms, reinforcement learning (RL) and transformers, by implementing a transformer as the policy network for RL agents.
 
+There are only a handful of articles that integrate transformers with reinforcement learning (RL), including the work by [Chen.L et al.](https://arxiv.org/abs/2106.01345), which introduced the "Transformer Decision" framework. This framework presents reinforcement learning (RL) in the context of sequential conditional modeling. Transformer Decision has achieved excellent results in offline model-free reinforcement learning tasks on Atari, OpenAI Gym, and Door-to-Key environments.
+
+A paper by [Chen.C. et al](https://arxiv.org/abs/2202.09481) introduces a model-based reinforcement learning agent called "TransDreamer", whose policy network is transformer-based. This model demonstrates better performance than previous approaches on 2D visual tasks and 3D first-person visual tasks. Additionally, [Upadhyay et al.](https://arxiv.org/abs/1912.03918) used transformers as the policy network in Q-Learning and evaluated its performance in video game environments.
+
 # Learning to Walk with Dual Agents for Knowledge Graph Reasoning
 
 Pytorch Implementation for AAAI' 2022 paper: Learning to Walk with Dual Agents for Knowledge Graph Reasoning
