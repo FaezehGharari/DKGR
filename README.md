@@ -1,9 +1,4 @@
-This repository is based on the [DKGR project](@article{zhang2021learning,
-  title={Learning to Walk with Dual Agents for Knowledge Graph Reasoning},
-  author={Zhang, Denghui and Yuan, Zixuan and Liu, Hao and Lin, Xiaodong and Xiong, Hui},
-  journal={arXiv preprint arXiv:2112.12876},
-  year={2021}
-}), which is described in detail below. In this fork, I have combined two powerful AI paradigms, reinforcement learning (RL) and transformers, by implementing a transformer as the policy network for RL agents.
+This repository is based on the [DKGR project](https://arxiv.org/abs/2112.12876), which is described in detail below. In this fork, I have combined two powerful AI paradigms, reinforcement learning (RL) and transformers, by implementing a transformer as the policy network for RL agents.
 
 There are only a handful of articles that integrate transformers with reinforcement learning (RL), including the work by [Chen.L et al.](https://arxiv.org/abs/2106.01345), which introduced the "Transformer Decision" framework. This framework presents reinforcement learning (RL) in the context of sequential conditional modeling. Transformer Decision has achieved excellent results in offline model-free reinforcement learning tasks on Atari, OpenAI Gym, and Door-to-Key environments.
 
