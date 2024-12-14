@@ -19,6 +19,7 @@ from scipy.special import logsumexp as lse
 import torch
 import torch.optim as optim
 from code.model.nell_eval import nell_eval
+import subprocess
 
 logger = logging.getLogger()
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -147,24 +148,13 @@ class Trainer(object):
 			self.device)  # [original batch_size * num_rollout, T]
 		cum_disc_reward[:,
 		self.path_length - 1] = rewards  # set the last time step to the reward received at the last state
+		self.gamma = self.gamma/self.path_length
 		for t in reversed(range(self.path_length)):
 			running_add = self.gamma * running_add + cum_disc_reward[:, t]
 			cum_disc_reward[:, t] = running_add
+
 		return cum_disc_reward
 
-	# def calc_cum_discounted_reward_without_credit(self, approx_rewards, rewards):
-	#
-	# 	num_instances = rewards.size(0)
-	# 	# approx_rewards = approx_rewards.t()
-	# 	running_add = torch.zeros([num_instances]).to(self.device)  # [original batch_size * num_rollout]
-	# 	cum_disc_reward = torch.zeros([num_instances, self.path_length]).to(
-	# 		self.device)  # [original batch_size * num_rollout, T]
-	# 	cum_disc_reward[:,
-	# 	self.path_length - 1] = rewards  # set the last time step to the reward received at the last state
-	# 	for t in reversed(range(self.path_length)):
-	# 		running_add = self.gamma * running_add + cum_disc_reward[:, t] + approx_rewards[:, t]
-	# 		cum_disc_reward[:, t] = running_add
-	# 	return cum_disc_reward
 
 	def calc_cum_discounted_reward_credit(self, approx_credits, entity_rewards, cluster_rewards):
 
@@ -221,14 +211,13 @@ class Trainer(object):
 
 			# get initial state for entity agent
 
-			entity_state_emb = torch.zeros(1, 2, self.batch_size * self.num_rollouts,
+			entity_state_emb = torch.zeros(1, self.batch_size * self.num_rollouts,
 										   self.e_agent.m * self.embedding_size).to(self.device)
 			entity_state = entity_episode.get_state()
 			next_possible_relations = torch.tensor(entity_state['next_relations']).long().to(
 				self.device)  # original batch_size * num_rollout, max_num_actions
 			next_possible_entities = torch.tensor(entity_state['next_entities']).long().to(self.device)
 
-			# range_arr = torch.arange(self.batch_size * self.num_rollouts).to(self.device)
 			prev_relation = self.e_agent.dummy_start_label.to(self.device)  # original batch_size * num_rollout, 1-D, (1...)
 
 			query_relation = entity_episode.get_query_relation()
@@ -244,7 +233,7 @@ class Trainer(object):
 				self.device)  # original batch_size * num_rollout, max_num_actions
 			prev_possible_clusters = torch.zeros_like(next_possible_clusters).to(self.device)
 
-			cluster_state_emb = torch.zeros(1, 2, self.batch_size * self.num_rollouts,
+			cluster_state_emb = torch.zeros(1, self.batch_size * self.num_rollouts,
 											self.e_agent.m * self.embedding_size).to(self.device)
 
 			range_arr = torch.arange(self.batch_size * self.num_rollouts).to(self.device)
@@ -306,18 +295,13 @@ class Trainer(object):
 			entity_rewards = entity_episode.get_reward()
 			cluster_rewards = cluster_episode.get_reward()
 
-			# positive_indices = np.where(cluster_rewards == self.positive_reward)[0][0]
-
 			entity_rewards_torch = torch.tensor(entity_rewards).to(self.device)
 			cluster_rewards_torch = torch.tensor(cluster_rewards).to(self.device)
 
-			# c_cum_discounted_reward = self.calc_cum_discounted_reward(
-			# 	cluster_rewards_torch)  # [original batch_size * num_rollout, T]
 			c_cum_discounted_reward = self.calc_cum_discounted_reward(cluster_rewards_torch)  # [original batch_size * num_rollout, T]
 			c_reinforce_loss = self.calc_reinforce_loss(c_all_losses, c_all_logits, c_cum_discounted_reward,
 														current_decay, self.baseline_c)
 
-			# e_cum_discounted_reward = self.calc_cum_discounted_reward(entity_rewards_torch + cluster_rewards_torch)
 			e_cum_discounted_reward = self.calc_cum_discounted_reward_credit(entity_episode.credits,
 																			 entity_rewards_torch,
 																			 cluster_rewards_torch)  # [original batch_size * num_rollout, T]
@@ -353,7 +337,7 @@ class Trainer(object):
 						format(self.batch_counter, np.sum(entity_rewards), e_avg_reward + c_avg_reward, num_ep_correct,
 							   (num_ep_correct / self.batch_size), train_loss))
 
-			if self.batch_counter % self.eval_every == 0: #or np.sum(entity_rewards) >= 1800:
+			if self.batch_counter % self.eval_every == 0:
 
 				self.test_rollouts = 100
 				self.test_environment = self.test_test_environment
@@ -389,6 +373,7 @@ class Trainer(object):
 			auc = 0
 
 			total_examples = self.test_environment.total_no_examples
+			print(('total_examples', total_examples))
 
 			for entity_episode, cluster_episode in tqdm(self.test_environment.get_episodes(0)):
 				batch_counter += 1
@@ -408,7 +393,7 @@ class Trainer(object):
 				next_entities = torch.tensor(entity_state['next_entities']).long().to(self.device)
 				current_entities = torch.tensor(entity_state['current_entities']).long().to(self.device)
 
-				entity_state_emb = torch.zeros(1, 2, temp_batch_size * self.test_rollouts,
+				entity_state_emb = torch.zeros(1, temp_batch_size * self.test_rollouts,
 											   self.e_agent.m * self.embedding_size).to(self.device)
 				prev_relation = (torch.ones(temp_batch_size * self.test_rollouts) * self.relation_vocab[
 					'DUMMY_START_RELATION']).long().to(self.device)
@@ -420,7 +405,7 @@ class Trainer(object):
 					self.device)  # original batch_size * num_rollout, max_num_actions
 				prev_possible_clusters = torch.zeros_like(next_possible_clusters)
 
-				cluster_state_emb = torch.zeros(1, 2, temp_batch_size * self.test_rollouts,
+				cluster_state_emb = torch.zeros(1, temp_batch_size * self.test_rollouts,
 												self.e_agent.m * self.embedding_size).to(self.device)
 
 				range_arr = torch.arange(temp_batch_size * self.test_rollouts).to(self.device)
@@ -477,12 +462,15 @@ class Trainer(object):
 						entity_state['current_entities'] = entity_state['current_entities'][y]
 						entity_state['next_relations'] = entity_state['next_relations'][y, :]
 						entity_state['next_entities'] = entity_state['next_entities'][y, :]
-						entity_state_emb = entity_state_emb[:, :, y, :]
+
+						entity_state_emb = entity_state_emb.unsqueeze(0)
+						entity_state_emb = entity_state_emb[:, y, :]
 
 						cluster_state['current_clusters'] = cluster_state['current_clusters'][y]
 						cluster_state['next_clusters'] = cluster_state['next_clusters'][y, :]
 						cluster_state['next_cluster_relations'] = cluster_state['next_cluster_relations'][y, :]
-						cluster_state_emb = cluster_state_emb[:, :, y, :]
+						cluster_state_emb = cluster_state_emb.unsqueeze(0)
+						cluster_state_emb = cluster_state_emb[:, y, :]
 
 						test_action_idx = x
 						c_idx = c_x
@@ -560,6 +548,7 @@ class Trainer(object):
 						final_scores = defaultdict(float)
 						for e in scores:
 							final_scores[e] = lse(scores[e])
+						print('final scores 587: ', final_scores.shape)
 						sorted_answers = sorted(final_scores, key=final_scores.get, reverse=True)
 						if answer in sorted_answers:
 							answer_pos = sorted_answers.index(answer)
@@ -613,6 +602,7 @@ class Trainer(object):
 				all_final_reward_20 += final_reward_20
 				auc += AP
 
+
 			all_final_reward_1 /= total_examples
 			all_final_reward_3 /= total_examples
 			all_final_reward_5 /= total_examples
@@ -624,7 +614,10 @@ class Trainer(object):
 					self.max_hits_at_10 = all_final_reward_10
 					torch.save(self.e_agent.state_dict(), self.model_dir + "e_model" + '.ckpt')
 					torch.save(self.c_agent.state_dict(), self.model_dir + "c_model" + '.ckpt')
-					# self.save_path = self.model_dir + "model" + '.ckpt'
+
+					#save transformer and save_path
+					torch.save((self.e_agent.policy_step.transformer.state_dict()), self.base_output_dir + "e_t_model" + '.ckpt')
+					torch.save(self.c_agent.policy_step.transformer.state_dict(), self.base_output_dir + "c_t_model" + '.ckpt')
 
 			if print_paths:
 				logger.info("[ printing paths at {} ]".format(self.output_dir + '/test_beam/'))
@@ -671,7 +664,6 @@ def read_pretrained_embeddings(options):
 	entity2vec = np.loadtxt(options['data_input_dir'] + 'entity2vec.bern')
 	relation2vec = np.loadtxt(options['data_input_dir'] + 'relation2vec.bern')
 	print(entity2vec.shape)
-	# assert entity2vec.shape[1] == 2 * options['embedding_size']
 
 	f1 = open(options['data_input_dir'] + 'entity2id.txt')
 	f2 = open(options['data_input_dir'] + 'relation2id.txt')
@@ -698,6 +690,7 @@ def read_pretrained_embeddings(options):
 	# save memory
 	entity2id = None
 	relation2id = None
+	print('PRE TRAINED OPTIONS')
 	return options
 
 
@@ -707,7 +700,7 @@ if __name__ == '__main__':
 	options = read_options()
 	options = read_pretrained_embeddings(options)
 	options['device'] = 'cuda' if options['use_cuda'] else 'cpu'
-	# options['device'] = 'cpu'
+
 	# Set logging
 	logger.setLevel(logging.INFO)
 	fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
@@ -766,17 +759,20 @@ if __name__ == '__main__':
 		output_dir = trainer.output_dir
 
 	# Testing on test with best model
+	#TODO
 	else:
 		logger.info("Skipping training")
 		logger.info("Loading model from {}".format(options["model_load_dir"]))
+		options["total_iterations"]=3
+		trainer = Trainer(options)
+		trainer.e_agent.policy_step.transformer.load_state_dict(torch.load(options["base_output_dir"] + "e_t_model" + '.ckpt'))
+		trainer.c_agent.policy_step.transformer.load_state_dict(torch.load(options["base_output_dir"] + "c_t_model" + '.ckpt'))
+		trainer.train()
+		save_path = trainer.save_path
+		path_logger_file = trainer.path_logger_file
+		output_dir = trainer.output_dir
 
-	# trainer = Trainer(options)
-	# if options['load_model']:
-	# 	save_path = options['model_load_dir']
-	# 	path_logger_file = trainer.path_logger_file
-	# 	output_dir = trainer.output_dir
-	#
-	# trainer.agent.load_state_dict(torch.load(save_path))
+
 
 	trainer.test_rollouts = 100
 
@@ -785,7 +781,6 @@ if __name__ == '__main__':
 	with open(output_dir + '/scores.txt', 'a') as score_file:
 		score_file.write("Test (beam) scores with best model from " + save_path + "\n")
 	trainer.test_environment = trainer.test_test_environment
-	# trainer.test_environment.test_rollouts = 100
 
 	trainer.test(beam=True, print_paths=True, save_model=False)
 
